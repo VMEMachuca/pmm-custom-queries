@@ -1,0 +1,18 @@
+mysql_innodb_index_stats2:
+   query: "SELECT database_name schema_name, table_name, index_name, max( CASE WHEN propshrt = 'a' THEN val END ) size_bytes, max( CASE WHEN propshrt = 'b' THEN val END ) leaf_pages_size_bytes FROM ( SELECT tbl.* FROM ( SELECT COALESCE(t.database_name, '*database_name') database_name, COALESCE(t.table_name, '*table_name') table_name, COALESCE(t.index_name, '*index_name') index_name, COALESCE(t.stat_name, '*stat_name') stat_name, COALESCE(t.propshrt, '*propshrt') propshrt, max( ( CASE WHEN t.stat_name IN ( 'size', 'n_leaf_pages' ) THEN t.mxvalue*@@innodb_page_size ELSE t.propertycnt END ) ) val FROM ( SELECT database_name, table_name, index_name, stat_name, propshrt, propertycnt, stat_value, mxvalue, rank FROM ( SELECT a.database_name, a.table_name, a.index_name, a.stat_name, x.propshrt, a.stat_value, x.propertycnt, x.mxvalue, find_in_set( CASE WHEN a.stat_name = 'size' THEN 'a' WHEN a.stat_name = 'n_leaf_pages' THEN 'b' END, x.propertylist ) rank FROM mysql.innodb_index_stats a INNER JOIN ( SELECT database_name, table_name, index_name, stat_name,CASE WHEN stat_name = 'size' THEN 'a' WHEN stat_name = 'n_leaf_pages' THEN 'b' END propshrt, group_concat( CASE WHEN stat_name = 'size' THEN 'a' WHEN stat_name = 'n_leaf_pages' THEN 'b' END ORDER BY database_name, table_name, index_name, stat_name ) propertylist, find_in_set( 'ckv', concat( group_concat( CASE WHEN stat_name = 'size' THEN 'a' WHEN stat_name = 'n_leaf_pages' THEN 'b' END ORDER BY database_name, table_name, index_name, stat_name ), ',ckv' ) ) -1 propertycnt, substring_index( group_concat( stat_value ORDER BY database_name, table_name, index_name, stat_name, stat_value DESC separator '|' ), '|', 1 ) mxvalue FROM mysql.innodb_index_stats WHERE stat_name IN ( 'size', 'n_leaf_pages' ) GROUP BY database_name, table_name, index_name, stat_name ) x ON ( a.database_name = x.database_name AND a.table_name = x.table_name AND a.index_name = x.index_name AND a.stat_name = x.stat_name ) ) z WHERE rank > 0 ORDER BY database_name, table_name, index_name, stat_name, rank ) t GROUP BY database_name, table_name, index_name, stat_name WITH rollup HAVING database_name IS NOT NULL AND table_name IS NOT NULL AND index_name IS NOT NULL AND stat_name IS NOT NULL ) tbl ) dta GROUP BY database_name, table_name, index_name WITH rollup HAVING database_name IS NOT NULL AND table_name IS NOT NULL AND index_name IS NOT NULL;"
+   metrics:
+    - table_name:
+        usage: "LABEL"
+        description: "Table name"
+    - size_bytes:
+        usage: "GAUGE"
+        description: "Index Size in Bytes"
+    - leaf_pages_size_bytes:
+        usage: "GAUGE"
+        description: "Leaf Pages Size in Bytes"
+    - schema_name:
+        usage: "LABEL"
+        description: "Schema Name"
+    - index_name:
+        usage: "LABEL"
+        description: "Index name"
